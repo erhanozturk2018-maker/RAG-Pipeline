@@ -1,0 +1,53 @@
+# --- Environment & Secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Package managers ---
+uv.lock
+poetry.lock
+Pipfile.lock
+
+# --- Project data & storage (regenerated, should not be versioned) ---
+storage/chroma_db/
+data/raw/*
+!data/raw/.gitkeep
+
+# --- Model caches (sentence-transformers / huggingface downloads) ---
+.cache/
+models/
+*.bin
+*.safetensors
+
+# --- Testing / coverage ---
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# --- IDE / editor ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# --- Logs ---
+*.log
+logs/

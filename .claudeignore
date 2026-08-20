@@ -1,0 +1,28 @@
+# --- Secrets: never let Claude read these ---
+.env
+.env.*
+!.env.example
+
+# --- Generated / heavy data: not useful as code context ---
+storage/chroma_db/
+data/raw/
+models/
+.cache/
+*.bin
+*.safetensors
+
+# --- Standard noise ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+logs/
+
+# --- Version control / editor internals ---
+.git/
+.vscode/
+.idea/
