@@ -17,6 +17,8 @@ from src.ingestion.parser import parse_document
 from src.ingestion.chunker import chunk_document
 from src.embedding.embedder import embed_passages
 from src.embedding.vectorstore import add_chunks
+from src.retrieval.retriever import retrieve, build_context
+from src.generation.generator import generate_answer
 
 
 def ingest_document(file_path: Path) -> int:
@@ -77,3 +79,37 @@ def ingest_directory(directory: Path) -> None:
         total_chunks += ingest_document(file_path)
 
     print(f"[pipeline] Ingested {len(files)} file(s), {total_chunks} chunk(s) total.")
+
+
+def answer_query(query: str) -> dict:
+    """Answer a question using the documents already stored in the vector DB.
+
+    This is the query-side counterpart to ingest_document(): it does not
+    touch the parser/chunker/embedder ingestion path at all, it only reads
+    from what's already been indexed.
+
+    Args:
+        query: the user's raw question text.
+
+    Returns:
+        {
+            "answer": "...",       # the LLM's generated answer
+            "matches": [...],      # the chunks that were retrieved (for
+                                    # inspecting/debugging what the answer
+                                    # was actually grounded in)
+        }
+    """
+    print(f"[pipeline] Retrieving chunks for query: {query!r}")
+    matches = retrieve(query)
+
+    if not matches:
+        print("[pipeline] No matching chunks found in the vector store.")
+        return {"answer": "No relevant documents found. Have you ingested anything yet?", "matches": []}
+
+    print(f"[pipeline] Found {len(matches)} chunk(s), building context...")
+    context = build_context(matches)
+
+    print("[pipeline] Generating answer...")
+    answer = generate_answer(query, context)
+
+    return {"answer": answer, "matches": matches}
