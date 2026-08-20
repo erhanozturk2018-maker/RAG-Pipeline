@@ -44,4 +44,7 @@ COLLECTION_NAME = "documents"
 TOP_K = 5
 
 # --- Generation ---
-GEMINI_MODEL_NAME = "gemini-2.5-flash"
+# gemini-2.5-flash was retired for new users; gemini-3.6-flash is the
+# current free-tier equivalent (per the API's own error message when
+# the old model name was rejected).
+GEMINI_MODEL_NAME = "gemini-3.5-flash-lite"

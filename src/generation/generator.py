@@ -7,11 +7,16 @@ retrieval has already found the relevant chunks. The LLM here does NOT
 search for anything -- its only job is to read the given context and
 answer the question using it. See the "Retrieval system vs LLM" split
 discussed in the architecture overview.
+
+Uses the new unified Google Gen AI SDK (google-genai). The older
+google-generativeai package reached end-of-life and no longer receives
+updates or bug fixes.
 """
 
 import os
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 import config
@@ -29,8 +34,7 @@ if not _api_key:
         "Get a free key at https://aistudio.google.com/apikey"
     )
 
-genai.configure(api_key=_api_key)
-_model = genai.GenerativeModel(config.GEMINI_MODEL_NAME)
+_client = genai.Client(api_key=_api_key)
 
 _SYSTEM_INSTRUCTION = (
     "You are a helpful assistant that answers questions using ONLY the "
@@ -53,12 +57,13 @@ def generate_answer(query: str, context: str) -> str:
     if not context:
         return "I couldn't find any relevant information in the documents to answer that."
 
-    prompt = (
-        f"{_SYSTEM_INSTRUCTION}\n\n"
-        f"Context:\n{context}\n\n"
-        f"Question: {query}\n\n"
-        f"Answer:"
-    )
+    prompt = f"Context:\n{context}\n\nQuestion: {query}"
 
-    response = _model.generate_content(prompt)
+    response = _client.models.generate_content(
+        model=config.GEMINI_MODEL_NAME,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=_SYSTEM_INSTRUCTION,
+        ),
+    )
     return response.text

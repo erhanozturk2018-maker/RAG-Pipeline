@@ -24,6 +24,14 @@ import config
 # tokenizer from disk/cache on every call would be wasteful.
 _tokenizer = AutoTokenizer.from_pretrained(config.EMBEDDING_MODEL_NAME)
 
+# We intentionally tokenize the FULL page text before splitting it into
+# chunks, purely to measure token counts and offsets -- this untruncated
+# sequence is never fed to the model directly (each resulting chunk is
+# capped at CHUNK_SIZE_TOKENS, well under the model's limit). Without this
+# line, the tokenizer prints a "sequence length > model max" warning every
+# time, which looks like a bug but isn't -- this silences that false alarm.
+_tokenizer.model_max_length = int(1e9)
+
 
 def _split_page_into_chunks(text: str) -> list[str]:
     """Split a single page's text into token-sized, overlapping windows.
