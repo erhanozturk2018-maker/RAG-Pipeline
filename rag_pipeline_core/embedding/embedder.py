@@ -16,7 +16,7 @@ Reference: https://huggingface.co/intfloat/multilingual-e5-large
 import torch
 from sentence_transformers import SentenceTransformer
 
-import config
+from rag_pipeline_core import config
 
 # --- Device selection ---
 # Use the GPU if available, otherwise fall back to CPU automatically.

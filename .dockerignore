@@ -1,0 +1,76 @@
+# Everything listed here is kept OUT of the build context, so it can
+# never end up in an image layer. Two reasons a path appears below:
+# (1) it's a secret, (2) it's host state that compose bind-mounts in at
+# runtime, so baking a stale copy into the image would be wrong.
+
+# --- Secrets: must NEVER be baked into a layer ---
+# GEMINI_API_KEY is injected at runtime via compose's `env_file: .env`.
+# Image layers are readable by anyone who can pull the image, and
+# deleting a file in a later layer does not remove it from the earlier
+# one -- so the only safe handling is to never copy it in at all.
+.env
+.env.*
+!env.example
+
+# --- Host state: bind-mounted at runtime, see compose.yaml ---
+data/
+storage/
+logs/
+
+# --- Virtual environments ---
+# The image builds its own venv via `uv sync`; a host .venv is both huge
+# and platform-wrong (Windows binaries in a Linux image).
+.venv/
+venv/
+env/
+ENV/
+
+# --- Python bytecode / build artifacts ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- Model caches (multi-GB, re-downloaded into the mounted storage/) ---
+.cache/
+models/
+*.bin
+*.safetensors
+
+# --- Dev-only: not needed at runtime ---
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.ruff_cache/
+
+# --- Version control ---
+.git/
+.gitignore
+.gitattributes
+
+# --- Editor / OS noise ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Docs and agent config ---
+# README.md is force-included below: pyproject.toml declares
+# `readme = "README.md"`, so uv needs it present during `uv sync`.
+*.md
+!README.md
+.claude/
+.claudeignore
+
+# --- Docker's own files: nothing in the image needs them ---
+Dockerfile
+.dockerignore
+compose.yaml
+docker-compose.yaml

@@ -8,10 +8,10 @@ prev/next neighbor chunks) yet -- those are Phase 2 additions once this
 baseline is confirmed to work.
 """
 
-from src.embedding.embedder import embed_query
-from src.embedding.vectorstore import query_similar
+from rag_pipeline_core.embedding.embedder import embed_query
+from rag_pipeline_core.embedding.vectorstore import query_similar
 
-import config
+from rag_pipeline_core import config
 
 
 def retrieve(query: str, top_k: int = config.TOP_K) -> list[dict]:

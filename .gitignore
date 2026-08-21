@@ -26,7 +26,10 @@ poetry.lock
 Pipfile.lock
 
 # --- Project data & storage (regenerated, should not be versioned) ---
-storage/chroma_db/
+# The whole storage/ tree, not just chroma_db/: the container sets
+# HF_HOME=/app/storage/hf_cache, so the ~2GB embedding model download
+# also lands here.
+storage/
 data/raw/*
 !data/raw/.gitkeep
 

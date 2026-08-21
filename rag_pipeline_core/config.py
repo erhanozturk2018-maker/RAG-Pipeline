@@ -10,9 +10,12 @@ from pathlib import Path
 
 # --- Paths ---
 # Path(__file__) = this config.py file's location.
-# .parent = the folder it's in (the repo root, since config.py lives there).
-# This makes paths work no matter which directory you run the script from.
-BASE_DIR = Path(__file__).parent
+# .parent = the package folder it's in (rag_pipeline_core/).
+# .parent.parent = the repo root, one level above the package. data/ and
+# storage/ live at the repo root, NOT inside the package, so we climb two
+# levels here. This makes paths work no matter which directory you run
+# the script from.
+BASE_DIR = Path(__file__).parent.parent
 
 RAW_DATA_DIR = BASE_DIR / "data" / "raw"
 CHROMA_PERSIST_DIR = BASE_DIR / "storage" / "chroma_db"

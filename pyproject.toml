@@ -53,7 +53,9 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# rag_pipeline_core is imported as a package from the project root
+# (same way main.py resolves it), so the root itself goes on sys.path.
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100

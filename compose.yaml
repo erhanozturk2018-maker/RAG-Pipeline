@@ -1,0 +1,65 @@
+# Standalone compose file for the RAG pipeline service.
+#
+# Works on its own:
+#     docker compose up
+#
+# It is also pulled into the wazuh-dashboard stack via an `include:`
+# block in ../wazuh_dashboard/compose.yaml, so a single
+# `docker compose up` from that directory brings up both projects.
+
+services:
+  rag-pipeline:
+    build: .
+    image: rag-pipeline
+    container_name: rag-pipeline
+    restart: unless-stopped
+
+    ports:
+      # Host port is overridable (RAG_PORT=8080 docker compose up) so this
+      # can't collide with something already on 8000 when it runs
+      # alongside the dashboard stack. The container port stays 8000,
+      # which is what the Dockerfile's CMD binds to.
+      - "${RAG_PORT:-8000}:8000"
+
+    env_file:
+      # Carries GEMINI_API_KEY. Injected at runtime, never baked into an
+      # image layer -- .dockerignore excludes .env from the build context.
+      - .env
+
+    environment:
+      # Audit-log timestamps are local time with an explicit UTC offset.
+      # A container with no TZ set runs on UTC, so rows written in the
+      # container would read +00:00 while rows written by a host-side
+      # `python main.py ...` run read the host's offset -- correct, but
+      # awkward to skim in one file. Setting TZ (e.g. TZ=Europe/Istanbul
+      # in .env) makes both agree. Defaults to UTC when unset.
+      TZ: ${TZ:-UTC}
+
+    volumes:
+      # Host bind-mounts, matching the project's existing design: raw
+      # documents and the Chroma vector DB live on the host, not in the
+      # image, so they survive rebuilds and stay editable from outside
+      # the container.
+      - ./data:/app/data
+      - ./storage:/app/storage
+      # Daily-rotating CSV audit logs (logs/YYYY-MM-DD.csv), written by
+      # rag_pipeline_core/logging_utils.py. Mounted so the dashboard (or
+      # anything else on the host) can read them directly.
+      - ./logs:/app/logs
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            # Gives the container the host GPU, which the embedding model
+            # (multilingual-e5-large) uses -- embedder.py falls back to
+            # CPU automatically if this isn't available, just far slower.
+            #
+            # REQUIRES nvidia-container-toolkit installed on the host and
+            # the `nvidia` runtime registered with Docker (verify with:
+            # `docker info --format '{{json .Runtimes}}'`). Without it,
+            # `docker compose up` fails with a device-request error --
+            # remove this whole deploy: block to run CPU-only.
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

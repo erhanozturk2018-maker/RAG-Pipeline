@@ -8,7 +8,7 @@ Chroma for a different vector DB later only requires changing this file.
 
 import chromadb
 
-import config
+from rag_pipeline_core import config
 
 # --- Client setup ---
 # PersistentClient writes to disk (config.CHROMA_PERSIST_DIR) so the

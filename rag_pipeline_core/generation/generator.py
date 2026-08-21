@@ -19,7 +19,7 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
-import config
+from rag_pipeline_core import config
 
 load_dotenv()
 

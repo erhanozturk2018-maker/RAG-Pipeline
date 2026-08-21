@@ -55,15 +55,21 @@ The LLM never searches for anything itself -- by the time it's called, retrieval
 
 ```
 .
-├── main.py                    # CLI entry point (ingest / ask)
-├── config.py                  # All tunable settings in one place
+├── main.py                    # CLI entry point (ingest / ask / serve)
 ├── pyproject.toml
+├── Dockerfile                 # Container image (uv + CUDA torch from pyproject)
+├── compose.yaml               # Standalone stack; also included by wazuh-dashboard
+├── .dockerignore
 │
 ├── data/raw/                  # Put source documents here (.pdf, .docx, .txt)
 ├── storage/chroma_db/         # ChromaDB's persistent data (auto-created)
+├── logs/                      # Daily CSV audit logs, YYYY-MM-DD.csv (auto-created)
 │
-├── src/
+├── rag_pipeline_core/
+│   ├── config.py              # All tunable settings in one place
+│   ├── api.py                 # FastAPI service (/status, /ingest, /ask)
 │   ├── pipeline.py            # Orchestrates the full ingest / query flow
+│   ├── logging_utils.py       # Daily-rotating CSV audit log
 │   ├── ingestion/
 │   │   ├── parser.py          # File -> raw text
 │   │   └── chunker.py         # Raw text -> token-sized chunks + metadata
@@ -77,6 +83,11 @@ The LLM never searches for anything itself -- by the time it's called, retrieval
 │
 └── tests/
 ```
+
+`main.py` is deliberately the only Python file at the project root -- everything
+else lives inside the `rag_pipeline_core` package, so the whole codebase is
+importable under one namespace (`from rag_pipeline_core.pipeline import ...`)
+whether it runs on the host or in a container.
 
 ## Setup
 
@@ -92,7 +103,7 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 ### 2. Set up your API key
 
 ```bash
-cp .env.example .env
+cp env.example .env
 ```
 
 Get a free Gemini API key at [Google AI Studio](https://aistudio.google.com/apikey) (no credit card required) and paste it into `.env`:

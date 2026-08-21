@@ -18,7 +18,7 @@ Each chunk also gets metadata that later pipeline stages depend on:
 
 from transformers import AutoTokenizer
 
-import config
+from rag_pipeline_core import config
 
 # Loaded once at import time and reused for every document -- loading a
 # tokenizer from disk/cache on every call would be wasteful.
