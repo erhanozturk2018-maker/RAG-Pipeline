@@ -111,3 +111,53 @@ def query_similar(query_embedding: list[float], top_k: int = config.TOP_K) -> li
             }
         )
     return matches
+
+
+def delete_document(document_id: str) -> int:
+    """Remove every chunk belonging to a single document.
+
+    Chroma has no "delete by metadata and tell me how many" call, so this
+    counts the matching chunks first and then deletes them -- the count
+    is what the caller reports and logs.
+
+    Args:
+        document_id: the document's id, i.e. the source filename without
+                     its extension (the same value chunker.chunk_document
+                     stores in each chunk's metadata).
+
+    Returns:
+        How many chunks were deleted (0 if the document wasn't in the
+        collection -- deleting something that isn't there is not an
+        error, it just does nothing).
+    """
+    # include=[] because we only need the ids here; fetching documents
+    # and metadatas too would pull every chunk's full text into memory
+    # for nothing.
+    existing = _collection.get(where={"document_id": document_id}, include=[])
+    chunk_ids = existing["ids"]
+
+    if not chunk_ids:
+        return 0
+
+    _collection.delete(ids=chunk_ids)
+    return len(chunk_ids)
+
+
+def list_documents() -> dict[str, int]:
+    """Return every document currently in the collection and its chunk count.
+
+    Used to tell the user what's actually indexed -- which is not
+    necessarily the same as what's sitting in data/raw/, since deleting a
+    file from disk does not touch the vector store (see
+    pipeline.delete_document).
+
+    Returns:
+        {"document_id": chunk_count, ...}, e.g. {"test_dokuman": 2}
+    """
+    records = _collection.get(include=["metadatas"])
+
+    counts: dict[str, int] = {}
+    for metadata in records["metadatas"]:
+        document_id = metadata["document_id"]
+        counts[document_id] = counts.get(document_id, 0) + 1
+    return counts

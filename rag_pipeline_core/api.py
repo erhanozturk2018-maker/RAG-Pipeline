@@ -24,7 +24,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from rag_pipeline_core import config
-from rag_pipeline_core.pipeline import ingest_directory, answer_query
+from rag_pipeline_core.pipeline import (
+    answer_query,
+    delete_document,
+    ingest_directory,
+    list_indexed_documents,
+)
 from rag_pipeline_core.generation.generator import is_configured
 from rag_pipeline_core.logging_utils import log_event
 
@@ -68,7 +73,7 @@ app = FastAPI(title="RAG MVP API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # tighten this to your dashboard's actual origin in production
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],  # DELETE needed for /documents/{id}
     allow_headers=["*"],
 )
 
@@ -104,6 +109,18 @@ class IngestRequest(BaseModel):
 
 
 class IngestResponse(BaseModel):
+    message: str
+
+
+class DocumentsResponse(BaseModel):
+    # {document_id: chunk_count}, e.g. {"test_dokuman": 2}
+    documents: dict[str, int]
+    total_chunks: int
+
+
+class DeleteResponse(BaseModel):
+    document_id: str
+    chunks_removed: int
     message: str
 
 
@@ -198,3 +215,60 @@ def ask(request: AskRequest):
         raise HTTPException(status_code=500, detail=f"Failed to generate answer: {e}")
 
     return AskResponse(answer=result["answer"], sources=result["matches"])
+
+
+@app.get("/documents", response_model=DocumentsResponse)
+def get_documents():
+    """List the documents currently in the vector store, with chunk counts.
+
+    Note this reflects what is INDEXED, which is not necessarily what is
+    sitting in data/raw/ -- deleting a file from disk does not remove its
+    chunks (use DELETE /documents/{document_id} for that).
+    """
+    documents = list_indexed_documents()
+    return DocumentsResponse(
+        documents=documents,
+        total_chunks=sum(documents.values()),
+    )
+
+
+@app.delete("/documents/{document_id}", response_model=DeleteResponse)
+def delete(document_id: str, user: str | None = None):
+    """Remove a document's chunks from the vector store.
+
+    `document_id` is the source filename WITHOUT its extension, i.e.
+    "test_dokuman" for test_dokuman.txt -- the same id GET /documents
+    returns and that /ask reports as a source.
+
+    `user` is an optional query parameter recorded in the audit log.
+
+    Deleting a document that isn't indexed returns 200 with
+    chunks_removed=0 rather than 404: the endpoint is idempotent, so a
+    retried or duplicated delete is not an error.
+    """
+    try:
+        removed = delete_document(document_id, user=user)
+    except Exception as e:
+        # delete_document already logged the pipeline-level failure; this
+        # row records that it surfaced to an HTTP caller as a 500.
+        _safe_log(
+            event_type="delete",
+            user=user,
+            embedding_model=config.EMBEDDING_MODEL_NAME,
+            file=document_id,
+            description=f"DELETE /documents/{document_id} returned 500.",
+            status="error",
+            error=str(e),
+        )
+        raise HTTPException(status_code=500, detail=f"Failed to delete document: {e}")
+
+    message = (
+        f"Removed {removed} chunk(s) for '{document_id}'."
+        if removed
+        else f"No document named '{document_id}' is indexed, nothing removed."
+    )
+    return DeleteResponse(
+        document_id=document_id,
+        chunks_removed=removed,
+        message=message,
+    )

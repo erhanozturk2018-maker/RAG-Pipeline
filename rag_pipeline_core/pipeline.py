@@ -19,7 +19,11 @@ from rag_pipeline_core.logging_utils import log_event
 from rag_pipeline_core.ingestion.parser import parse_document
 from rag_pipeline_core.ingestion.chunker import chunk_document
 from rag_pipeline_core.embedding.embedder import embed_passages
-from rag_pipeline_core.embedding.vectorstore import add_chunks
+from rag_pipeline_core.embedding.vectorstore import (
+    add_chunks,
+    delete_document as _delete_document_chunks,
+    list_documents,
+)
 from rag_pipeline_core.retrieval.retriever import retrieve, build_context
 from rag_pipeline_core.generation.generator import generate_answer
 
@@ -68,6 +72,17 @@ def ingest_document(file_path: Path, user: str | None = None) -> int:
         print(f"[pipeline] Embedding {len(chunks)} chunk(s)...")
         texts = [chunk["text"] for chunk in chunks]
         embeddings = embed_passages(texts)
+
+        # Clear this document's previous chunks before writing the new
+        # ones. add_chunks() upserts by chunk_id, which overwrites
+        # same-numbered chunks but leaves ORPHANS behind whenever the
+        # re-ingested version produces fewer chunks than the old one
+        # (e.g. the file was shortened): old chunk _0007 would survive
+        # with stale text and still be retrievable. Deleting first makes
+        # re-ingestion a true replace.
+        removed = _delete_document_chunks(document_id)
+        if removed:
+            print(f"[pipeline] Replacing {removed} existing chunk(s) for '{document_id}'.")
 
         print("[pipeline] Writing to vector store...")
         add_chunks(chunks, embeddings)
@@ -172,6 +187,58 @@ def answer_query(query: str, user: str | None = None) -> dict:
     return {"answer": answer, "matches": matches}
 
 
+def delete_document(document_id: str, user: str | None = None) -> int:
+    """Remove a document's chunks from the vector store.
+
+    Deleting a file from data/raw/ does NOT remove it from the vector
+    store -- the two are independent, and nothing scans the directory for
+    disappearances. This is the explicit way to retract a document, so
+    it stops showing up as a source in answers.
+
+    Deliberately NOT automatic: an "anything missing from data/raw/ gets
+    purged" sweep would wipe the whole collection the moment the
+    directory looked empty for the wrong reason (an unmounted volume, a
+    container starting before its bind-mount is ready).
+
+    Args:
+        document_id: source filename without its extension, e.g.
+                     "test_dokuman" for test_dokuman.txt.
+        user: optional identifier of whoever triggered this, recorded in
+              the audit log. Defaults to "local" when not supplied.
+
+    Returns:
+        The number of chunks removed. 0 means the document wasn't in the
+        store -- that is not treated as an error.
+    """
+    started = time.perf_counter()
+
+    try:
+        removed = _delete_document_chunks(document_id)
+    except Exception as e:
+        _log_delete(user, "", document_id,
+                    f"Failed to delete document '{document_id}'.", started,
+                    status="error", error=str(e))
+        raise
+
+    if removed:
+        print(f"[pipeline] Deleted {removed} chunk(s) for '{document_id}'.")
+        description = f"Deleted {removed} chunk(s) for document '{document_id}'."
+    else:
+        print(f"[pipeline] No chunks found for '{document_id}', nothing to delete.")
+        description = f"No chunks found for document '{document_id}', nothing deleted."
+
+    _log_delete(user, removed, document_id, description, started)
+    return removed
+
+
+def list_indexed_documents() -> dict[str, int]:
+    """Return {document_id: chunk_count} for everything currently indexed.
+
+    Read-only and cheap, so it is not audit-logged.
+    """
+    return list_documents()
+
+
 # --- Audit-log helpers -------------------------------------------------
 # These sit at the bottom rather than the top so the file still reads as
 # parse -> chunk -> embed -> store -> retrieve -> generate from the top.
@@ -195,6 +262,30 @@ def _log_ingest(user, chunk_count, file, description, started, status="success",
             embedding_model=config.EMBEDDING_MODEL_NAME,
             chunk_count=chunk_count,
             file=file,
+            description=description,
+            status=status,
+            error=error,
+            duration_ms=_elapsed_ms(started),
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[pipeline] WARNING: audit logging failed: {e}")
+
+
+def _log_delete(user, chunk_count, document_id, description, started,
+                status="success", error=""):
+    """Write one `delete` audit row. See _log_ingest for the try/except rationale.
+
+    document_id goes in the `file` column: it IS the filename, minus the
+    extension, and adding a separate column just for it would break the
+    agreed CSV schema.
+    """
+    try:
+        log_event(
+            "delete",
+            user=user,
+            embedding_model=config.EMBEDDING_MODEL_NAME,
+            chunk_count=chunk_count,
+            file=document_id,
             description=description,
             status=status,
             error=error,
