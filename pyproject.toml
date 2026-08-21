@@ -1,5 +1,5 @@
 [project]
-name = "rag-pipeline"
+name = "rag-mvp"
 version = "0.1.0"
 description = "A small-scale, self-hosted RAG (Retrieval-Augmented Generation) MVP"
 readme = "README.md"
@@ -7,14 +7,34 @@ requires-python = ">=3.10,<3.13"
 license = "MIT"
 
 dependencies = [
+    # --- Document parsing ---
     "pypdf>=4.0.0",
     "python-docx>=1.1.0",
+
+    # --- Embedding (local, GPU-accelerated) ---
+    # Note: cross-encoder support (used for the reranker in Phase 2) is
+    # already included in sentence-transformers, no extra needed.
     "sentence-transformers>=3.0.0",
     "torch>=2.2.0",
+    # transformers is a transitive dependency of sentence-transformers, but
+    # we import AutoTokenizer from it directly in chunker.py, so it's
+    # declared explicitly here too.
     "transformers>=4.40.0",
+
+    # --- Vector DB (self-hosted, embedded) ---
     "chromadb>=0.5.0",
+
+    # --- Generation (Gemini API, free tier) ---
+    # Note: google-generativeai is deprecated (EOL). Using the new unified
+    # Google Gen AI SDK instead.
     "google-genai>=1.0.0",
+
+    # --- Config / secrets ---
     "python-dotenv>=1.0.0",
+
+    # --- API service (for integrating with external apps like the dashboard) ---
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +44,10 @@ dev = [
     "ruff>=0.5.0",
 ]
 
+# This is an application, not a library meant to be published to PyPI.
+# Tell uv not to build/install this project itself as a package -- just
+# resolve and install its dependencies into the venv. This also means we
+# don't need a src/ layout or a build backend to exist yet.
 [tool.uv]
 package = false
 
@@ -38,6 +62,12 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
+# --- CUDA-enabled torch install via uv ---
+# Plain `pip` does not support per-package index selection; this block only
+# takes effect when installing with `uv`. Install with:
+#   uv sync
+# Match the CUDA version below to your driver: cu121, cu124, cu126, etc.
+# Run `nvidia-smi` and compare against the "CUDA Version" shown at the top.
 [tool.uv.sources]
 torch = { index = "pytorch-cu121" }
 
